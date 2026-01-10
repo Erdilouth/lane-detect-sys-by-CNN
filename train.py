@@ -5,16 +5,32 @@ from torch.utils.data import DataLoader
 from dataset import CULaneDataset  # 导入你之前的类
 from model import MobileNetLaneNet  # 导入你之前的模型
 
+class DiceLoss(nn.Module):
+    def __init__(self):
+        super(DiceLoss, self).__init__()
+
+    def forward(self, inputs, targets, smooth=1):
+        # inputs: 模型的输出 (经过 Sigmoid)
+        # targets: 真实的标签
+        
+        # 展平 tensor，方便计算交集
+        inputs = inputs.view(-1)
+        targets = targets.view(-1)
+        
+        intersection = (inputs * targets).sum()                            
+        dice = (2.*intersection + smooth)/(inputs.sum() + targets.sum() + smooth)  
+        
+        return 1 - dice
 
 def train():
     # 1. 配置参数 (Hyperparameters)
-    data_root = 'D:/database/archive/CULane/driver_161_90frame/driver_161_90frame'  # 你的数据集路径
+    data_root = 'D:/database/archive/CULane/driver_161_90frame/driver_161_90frame'  # 数据集路径
     train_list = 'train_list.txt'
     val_list = 'val_list.txt'
 
     batch_size = 8  # 每次喂给模型多少张图（如果显存报错，减小到 4 或 2）
     epochs = 10  # 全部数据训练多少轮
-    learning_rate = 1e-4  # 学习率（步子迈多大）
+    learning_rate = 1e-4  # 学习率
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # 优先使用GPU
 
     # 2. 准备数据加载器 (DataLoader)
@@ -26,8 +42,8 @@ def train():
 
     # 3. 初始化模型、损失函数和优化器
     model = MobileNetLaneNet().to(device)
-    # BCELoss: 用于二分类问题的损失函数（车道线 vs 背景）
-    criterion = nn.BCELoss()
+    # DICEloss: 损失函数（车道线 vs 背景）
+    criterion = DiceLoss()
     # Adam: 自动调整学习率的优化器，非常适合新手
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
