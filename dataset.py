@@ -72,8 +72,8 @@ class CULaneDataset(Dataset):
 print("Dataset 类已整合完成，包含坐标解析与缩放功能。")
 
 # 1. 定义你电脑上的实际路径
-my_data_path = 'D:/database/archive/CULane/driver_161_90frame/driver_161_90frame'
-my_list_file = 'D:/Portfolio/lane-detect-sys-by-CNN/train_list.txt'
+my_data_path = 'D:/Database for ML/archive/CULane/example'
+my_list_file = 'D:/Original work/lane-detect-sys-by-CNN/train_list.txt'
 
 # 2. 创建数据集对象（此时才把路径传进去）
 dataset = CULaneDataset(data_root=my_data_path, list_file=my_list_file)

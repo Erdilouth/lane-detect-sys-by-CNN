@@ -3,7 +3,7 @@ import random
 
 # 1. 设置你的数据集根目录
 # 比如你的图片在 D:/CULane/driver_161_90frame...
-dataset_root = 'D:/database/archive/CULane/driver_161_90frame/driver_161_90frame'
+dataset_root = 'D:/Database for ML/archive/CULane/example'
 
 
 def generate_list():

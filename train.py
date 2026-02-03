@@ -24,7 +24,7 @@ class DiceLoss(nn.Module):
 
 def train():
     # 1. 配置参数 (Hyperparameters)
-    data_root = 'D:/database/archive/CULane/driver_161_90frame/driver_161_90frame'  # 数据集路径
+    data_root = 'D:/Database for ML/archive/CULane/example'  # 数据集路径
     train_list = 'train_list.txt'
     val_list = 'val_list.txt'
 
@@ -42,7 +42,7 @@ def train():
 
     # 3. 初始化模型、损失函数和优化器
     model = MobileNetLaneNet().to(device)
-    # DICEloss: 损失函数（车道线 vs 背景）
+    # DICE loss: 损失函数（车道线 vs 背景）
     criterion = DiceLoss()
     # Adam: 自动调整学习率的优化器，非常适合新手
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)

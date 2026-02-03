@@ -3,9 +3,7 @@ import cv2
 import numpy as np
 from model import MobileNetLaneNet
      
-# 设置分辨率（与训练模型时保持一致）
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
      
 def process_videostream(model_path):
     # 1. 基础配置
@@ -20,6 +18,9 @@ def process_videostream(model_path):
 
     # 3. 打开视频文件
     cap = cv2.VideoCapture(0)
+    # 设置分辨率（与训练模型时保持一致）
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
     if not cap.isOpened():
         print("错误：未找到摄像头对象，请检查硬件连接情况。")
@@ -90,6 +91,6 @@ def process_videostream(model_path):
 
 
 if __name__ == "__main__":
-    model_file = 'lane_model_epoch_10.pth'
+    model_file = 'D:/Original work/lane-detect-sys-by-CNN/lane_model_epoch_10.pth'
 
-    process_videostream(model_path)
+    process_videostream(model_file)
