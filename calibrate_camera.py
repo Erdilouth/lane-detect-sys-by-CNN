@@ -5,7 +5,7 @@ import json
 
 # --- 配置参数 ---
 CHESSBOARD_SIZE = (9, 6)
-SQUARE_SIZE = 25.0  # 棋盘格每个小方块的实际尺寸 (mm)
+SQUARE_SIZE = 18.0  # 棋盘格每个小方块的实际尺寸 (mm)
 IMAGE_PATH = "calibration_images/*.jpg"
 # ----------------
 

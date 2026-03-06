@@ -3,7 +3,7 @@ import os
 
 # --- 配置参数 ---
 SAVE_DIR = "calibration_images"
-CHESSBOARD_SIZE = (9, 6)  # 棋盘格内角点数量 (行, 列)
+CHESSBOARD_SIZE = (9, 7)  # 棋盘格内角点数量 (行, 列)
 # ----------------
 
 if not os.path.exists(SAVE_DIR):
