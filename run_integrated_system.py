@@ -1,22 +1,16 @@
 #!/usr/bin/env python3
 """
-车道检测系统启动脚本
-Lane Detection System Launcher
+车道检测系统启动脚本（项目根目录运行）
+Lane Detection System Launcher (run from project root)
 """
 
 import sys
 import os
 
-# 添加项目根目录到Python路径（确保包导入正常工作）
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(script_dir)
-sys.path.insert(0, script_dir)
-sys.path.insert(0, project_root)
+# 添加integrated_system目录到Python路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'integrated_system'))
 
-# 切换到integrated_system目录作为当前工作目录
-os.chdir(script_dir)
-
-# 导入包
+# 导入并运行
 import integrated_system.main_pipeline as main_pipeline
 
 if __name__ == "__main__":
