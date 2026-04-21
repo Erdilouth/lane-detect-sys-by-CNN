@@ -85,24 +85,51 @@ class LaneDetectionPipeline:
         use_gstreamer = CAMERA_CONFIG["use_gstreamer"]
         
         if use_gstreamer:
-            # 使用GStreamer管道（Jetson相机）
-            pipeline = CAMERA_CONFIG["gstreamer_pipeline"]
+            # 使用GStreamer管道（Jetson CSI摄像头 - IMX219）
+            sensor_id = CAMERA_CONFIG.get("sensor_id", 0)
+            width = CAMERA_CONFIG["width"]
+            height = CAMERA_CONFIG["height"]
+            fps = CAMERA_CONFIG["fps"]
+            
+            # 构建GStreamer管道
+            pipeline = (
+                f"nvarguscamerasrc sensor-id={sensor_id} ! "
+                f"video/x-raw(memory:NVMM), width={width}, height={height}, "
+                f"format=NV12, framerate={fps}/1 ! "
+                f"nvvidconv ! video/x-raw, format=BGRx ! "
+                f"videoconvert ! video/x-raw, format=BGR ! "
+                f"appsink"
+            )
+            
+            self.logger.info(f"使用GStreamer管道: {pipeline}")
             self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
         else:
             # 使用USB摄像头
             camera_id = CAMERA_CONFIG["camera_id"]
+            self.logger.info(f"使用USB摄像头: /dev/video{camera_id}")
             self.cap = cv2.VideoCapture(camera_id)
+            
+            # 设置分辨率
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_CONFIG["width"])
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_CONFIG["height"])
+            self.cap.set(cv2.CAP_PROP_FPS, CAMERA_CONFIG["fps"])
         
         if not self.cap.isOpened():
             self.logger.error("❌ 无法打开摄像头")
+            if use_gstreamer:
+                self.logger.error("提示: 请确保IMX219 CSI摄像头已正确连接")
+                self.logger.error("提示: 检查nvarguscamerasrc是否正常工作")
             return False
         
-        # 设置分辨率
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_CONFIG["width"])
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_CONFIG["height"])
-        self.cap.set(cv2.CAP_PROP_FPS, CAMERA_CONFIG["fps"])
+        # 验证实际分辨率
+        actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        actual_fps = int(self.cap.get(cv2.CAP_PROP_FPS))
         
         self.logger.info(f"✅ 摄像头初始化成功")
+        self.logger.info(f"   分辨率: {actual_width}x{actual_height}")
+        self.logger.info(f"   帧率: {actual_fps} FPS")
+        
         return True
     
     def capture_worker(self):
