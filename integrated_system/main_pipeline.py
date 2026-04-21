@@ -86,19 +86,41 @@ class LaneDetectionPipeline:
         width = CAMERA_CONFIG["width"]
         height = CAMERA_CONFIG["height"]
         fps = CAMERA_CONFIG["fps"]
+        use_gstreamer = CAMERA_CONFIG.get("use_gstreamer", False)
         
-        # 直接使用OpenCV调用摄像头
-        self.logger.info(f"打开摄像头: /dev/video{camera_id}")
-        self.cap = cv2.VideoCapture(camera_id)
+        # 根据配置选择打开方式
+        if use_gstreamer:
+            # 使用 GStreamer 管道（Jetson CSI 摄像头必须）
+            pipeline = CAMERA_CONFIG["gstreamer_pipeline"].format(
+                sensor_id=camera_id,
+                width=width,
+                height=height,
+                fps=fps
+            )
+            self.logger.info(f"使用 GStreamer 管道打开摄像头")
+            self.logger.info(f"管道：{pipeline}")
+            self.cap = cv2.VideoCapture(pipeline, cv2.CAP_GSTREAMER)
+        else:
+            # 直接使用 OpenCV 调用摄像头（USB 摄像头或 V4L2）
+            self.logger.info(f"打开摄像头：/dev/video{camera_id}")
+            self.cap = cv2.VideoCapture(camera_id)
         
         if not self.cap.isOpened():
             self.logger.error("❌ 无法打开摄像头")
+            if use_gstreamer:
+                self.logger.error("请检查:")
+                self.logger.error("  1. CSI 摄像头是否正确连接")
+                self.logger.error("  2. 传感器 ID 是否正确 (尝试修改 camera_id)")
+                self.logger.error("  3. GStreamer 和 nvarguscamerasrc 是否已安装")
+                self.logger.error("  4. 运行 'v4l2-ctl --list-devices' 查看设备")
             return False
         
-        # 设置分辨率和帧率
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        self.cap.set(cv2.CAP_PROP_FPS, fps)
+        # 对于 GStreamer，分辨率和帧率已在管道中设置
+        if not use_gstreamer:
+            # 设置分辨率和帧率
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+            self.cap.set(cv2.CAP_PROP_FPS, fps)
         
         # 验证实际参数
         actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -106,10 +128,10 @@ class LaneDetectionPipeline:
         actual_fps = int(self.cap.get(cv2.CAP_PROP_FPS))
         
         self.logger.info(f"✅ 摄像头初始化成功")
-        self.logger.info(f"   配置分辨率: {width}x{height}")
-        self.logger.info(f"   实际分辨率: {actual_width}x{actual_height}")
-        self.logger.info(f"   目标帧率: {fps} FPS")
-        self.logger.info(f"   实际帧率: {actual_fps} FPS")
+        self.logger.info(f"   配置分辨率：{width}x{height}")
+        self.logger.info(f"   实际分辨率：{actual_width}x{actual_height}")
+        self.logger.info(f"   目标帧率：{fps} FPS")
+        self.logger.info(f"   实际帧率：{actual_fps} FPS")
         
         return True
     

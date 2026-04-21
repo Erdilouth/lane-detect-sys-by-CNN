@@ -112,12 +112,27 @@ python main_pipeline.py
 
 ```python
 CAMERA_CONFIG = {
-    "camera_id": 0,              # 摄像头ID
+    "camera_id": 0,              # 摄像头 ID (CSI 传感器 ID)
     "width": 1280,              # 图像宽度
     "height": 720,              # 图像高度
     "fps": 30,                 # 目标帧率
-    "use_gstreamer": False,      # 是否使用GStreamer
+    "use_gstreamer": True,      # Jetson Orin Nano CSI 摄像头必须设为 True
 }
+```
+
+**Jetson Orin Nano CSI 摄像头重要说明：**
+
+1. **必须启用 GStreamer**：将 `use_gstreamer` 设置为 `True`
+2. **传感器 ID**：CSI 摄像头的 `sensor-id` 通常为 0，如有多个摄像头可尝试 1、2 等
+3. **GStreamer 管道**：使用 NVIDIA 的 `nvarguscamerasrc` 插件访问 CSI 摄像头
+
+如果摄像头无法打开，请检查：
+```bash
+# 查看可用的视频设备
+v4l2-ctl --list-devices
+
+# 测试 GStreamer 管道
+gst-launch-1.0 nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), width=1280, height=720, framerate=30/1 ! nvvidconv ! fakesink
 ```
 
 ### IPM配置
@@ -308,3 +323,58 @@ python build_engine.py
 ## 🙏 致谢
 
 感谢原作者提供的车道检测框架基础代码。
+## 📷 CSI 摄像头故障排除
+
+### Jetson Orin Nano CSI 摄像头无法启用？
+
+#### 问题原因
+
+在 Jetson Orin Nano 上，CSI 摄像头（如 IMX219、IMX477）**不能**通过简单的 `cv2.VideoCapture(0)` 方式访问，必须使用 NVIDIA 的 GStreamer 插件。
+
+#### 解决方案
+
+1. **确保配置正确**：在 `config.py` 中设置：
+   ```python
+   CAMERA_CONFIG = {
+       "camera_id": 0,              # CSI 传感器 ID
+       "use_gstreamer": True,       # 必须设为 True
+       ...
+   }
+   ```
+
+2. **运行摄像头测试脚本**：
+   ```bash
+   cd integrated_system
+   python camera_test.py
+   ```
+
+3. **检查硬件连接**：
+   ```bash
+   # 查看视频设备
+   v4l2-ctl --list-devices
+   
+   # 查看 MIPI CSI 摄像头状态
+   sudo jetson-io --list
+   ```
+
+4. **测试 GStreamer 管道**：
+   ```bash
+   gst-launch-1.0 nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), width=1280, height=720, framerate=30/1 ! nvvidconv ! fakesink
+   ```
+
+5. **常见问题**：
+   - **权限问题**：尝试 `sudo python run.py`
+   - **摄像头被占用**：关闭其他使用摄像头的程序
+   - **传感器 ID 错误**：尝试修改 `camera_id` 为 1、2 等
+   - **驱动问题**：确保 JetPack 已正确安装
+
+#### 更换其他 CSI 摄像头
+
+如果使用多个 CSI 摄像头，需要更改 `sensor-id`：
+```python
+CAMERA_CONFIG = {
+    "camera_id": 1,  # 尝试 1, 2, 3...
+    "use_gstreamer": True,
+    ...
+}
+```
