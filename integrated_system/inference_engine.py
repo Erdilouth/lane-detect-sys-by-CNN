@@ -61,23 +61,24 @@ class TensorRTInferenceEngine:
         if err != cuda.CUresult.CUDA_SUCCESS:
             raise RuntimeError(f"CUDA初始化失败: {err}")
         self.logger.debug("CUDA初始化成功")
-    
+
     def _load_engine(self):
         """加载TensorRT引擎"""
         if not os.path.exists(self.engine_path):
             raise FileNotFoundError(f"引擎文件不存在: {self.engine_path}")
-        
-        self.logger = trt.Logger(trt.Logger.WARNING)
-        self.runtime = trt.Runtime(self.logger)
-        
+
+        # ✅ 使用 _trt_logger 创建 runtime（不要覆盖 self.logger!）
+        runtime = trt.Runtime(self._trt_logger)
+
         with open(self.engine_path, "rb") as f:
-            self.engine = self.runtime.deserialize_cuda_engine(f.read())
-        
+            self.engine = runtime.deserialize_cuda_engine(f.read())
+
         self.context = self.engine.create_execution_context()
         self.context.set_input_shape(self.input_name, self.input_shape)
-        
-        # 获取输出形状
+
         self.output_shape = self.context.get_tensor_shape(self.output_name)
+
+        # ✅ 使用标准 logging 输出调试信息
         self.logger.debug(f"输出形状: {self.output_shape}")
     
     def _allocate_memory(self):
