@@ -19,14 +19,13 @@ MODEL_CONFIG = {
 # 摄像头配置
 # ============================================
 CAMERA_CONFIG = {
-    "camera_id": 0,  # 摄像头ID（USB摄像头通常为0）
+    "camera_id": 0,  # 摄像头ID（CSI摄像头通常为0）
     "width": 1280,   # 图像宽度
     "height": 720,   # 图像高度
     "fps": 30,       # 目标帧率
     
-    # Jetson CSI摄像头配置（IMX219）
-    "use_gstreamer": True,  # 启用GStreamer以使用CSI摄像头
-    "sensor_id": 0          # IMX219传感器ID（通常为0）
+    # 直接使用OpenCV调用摄像头（不需要GStreamer管道）
+    "use_gstreamer": False
 }
 
 # ============================================
