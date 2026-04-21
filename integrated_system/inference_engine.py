@@ -34,7 +34,8 @@ class TensorRTInferenceEngine:
             engine_path: TensorRT引擎文件路径，如果为None则使用配置文件中的路径
         """
         self.logger = logging.getLogger(__name__)
-        
+        self._trt_logger = trt.Logger(trt.Logger.WARNING)
+
         if engine_path is None:
             engine_path = get_model_path()
         
@@ -50,7 +51,7 @@ class TensorRTInferenceEngine:
         self._load_engine()
         
         # 分配内存
-        self._allocate_memory
+        self._allocate_memory()
         
         self.logger.info("✅ TensorRT推理引擎初始化成功")
     
