@@ -9,7 +9,7 @@ import os
 # 模型配置
 # ============================================
 MODEL_CONFIG = {
-    "engine_path": "../mobilenet_lanenet.engine",  # TensorRT引擎路径
+    "engine_path": "/home/erdilouth/mobilenet_lanenet.engine",  # TensorRT引擎路径
     "input_shape": (1, 3, 256, 512),  # (Batch, Channel, Height, Width)
     "input_name": "input",
     "output_name": "output",
@@ -43,7 +43,7 @@ CAMERA_CONFIG = {
 # ============================================
 IPM_CONFIG = {
     # 使用真实相机标定参数
-    "camera_params_path": "../camera_params.json",
+    "camera_params_path": "camera_params.json",
     
     # 手动指定ROI区域（如果自动计算失败，使用这些值）
     "manual_src_points": [
