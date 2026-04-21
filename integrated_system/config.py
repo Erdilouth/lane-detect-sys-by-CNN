@@ -26,16 +26,7 @@ CAMERA_CONFIG = {
     
     # Jetson CSI摄像头配置（IMX219）
     "use_gstreamer": True,  # 启用GStreamer以使用CSI摄像头
-    "sensor_id": 0,         # IMX219传感器ID（通常为0）
-    "sensor_mode": 3,       # 传感器模式：3=1280x720 30fps
-    "gstreamer_pipeline": (
-        "nvarguscamerasrc sensor-id=0 ! "
-        "video/x-raw(memory:NVMM), width=1280, height=720, "
-        "format=NV12, framerate=30/1 ! "
-        "nvvidconv ! video/x-raw, format=BGRx ! "
-        "videoconvert ! video/x-raw, format=BGR ! "
-        "appsink"
-    )
+    "sensor_id": 0          # IMX219传感器ID（通常为0）
 }
 
 # ============================================
