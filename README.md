@@ -7,7 +7,7 @@
 
 ## 📖 项目简介
 
-本项目是为无人载货车辆设计的边缘侧自动驾驶核心子系统，专注于**车道保持 (Lane Keeping)** 功能。系统打通了从前端视觉感知、TensorRT 推理加速到后端 MPC+LQR 轨迹控制的完整技术闭环，旨在边缘计算设备上实现低延迟、高精度的车辆导航与控制。
+本项目是边缘侧自动驾驶核心子系统，专注于**车道保持 (Lane Keeping)** 功能。系统打通了从前端视觉感知、TensorRT 推理加速到后端 MPC+LQR 轨迹控制的完整技术闭环，旨在边缘计算设备上实现低延迟、高精度的车辆导航与控制。
 
 *<img width="601" height="490" alt="系统框图" src="https://github.com/user-attachments/assets/6fc2f6be-c5c5-464a-bcfe-bc14db4e9069" />*
 
