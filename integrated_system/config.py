@@ -24,8 +24,18 @@ CAMERA_CONFIG = {
     "height": 720,   # 图像高度
     "fps": 30,       # 目标帧率
     
-    # 直接使用OpenCV调用摄像头（不需要GStreamer管道）
-    "use_gstreamer": False
+    # Jetson Orin Nano CSI摄像头必须使用GStreamer
+    "use_gstreamer": True,
+    
+    # GStreamer管道配置（IMX219/IMX477等CSI摄像头）
+    "gstreamer_pipeline": (
+        "nvarguscamerasrc sensor-id={sensor_id} ! "
+        "video/x-raw(memory:NVMM), width={width}, height={height}, "
+        "framerate={fps}/1 ! "
+        "nvvidconv ! video/x-raw, format=BGRx ! "
+        "videoconvert ! video/x-raw, format=BGR ! "
+        "appsink"
+    )
 }
 
 # ============================================
