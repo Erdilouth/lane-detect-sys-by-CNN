@@ -27,7 +27,7 @@ CAMERA_CONFIG = {
     # 使用OpenCV处理USB摄像头（支持USB相机）
     "use_libargus": False,
     "usb_camera_id": 0,        # USB摄像头ID（通常为0或1）
-    "usb_camera_fourcc": "MJPG" # 视频编码格式（MJPG, YUYV等）
+    "usb_camera_fourcc": None  # 视频编码格式（None表示使用摄像头默认，或'MJPG', 'YUYV'等）
 }
 
 # ============================================

@@ -154,13 +154,12 @@ class LaneDetectionPipeline:
         width = CAMERA_CONFIG["width"]
         height = CAMERA_CONFIG["height"]
         fps = CAMERA_CONFIG["fps"]
-        fourcc = CAMERA_CONFIG.get("usb_camera_fourcc", "MJPG")
+        preferred_fourcc = CAMERA_CONFIG.get("usb_camera_fourcc")
 
         # 尝试不同的后端打开摄像头
         backends = [
             cv2.CAP_ANY,
             cv2.CAP_V4L2,
-            cv2.CAP_GSTREAMER,
         ]
 
         self.cap = None
@@ -180,9 +179,8 @@ class LaneDetectionPipeline:
             self.logger.info(f"提示：可以尝试使用 'ls /dev/video*' 查看可用摄像头设备")
             return False
 
-        # 设置视频编码格式
-        fourcc_code = cv2.VideoWriter_fourcc(*fourcc)
-        self.cap.set(cv2.CAP_PROP_FOURCC, fourcc_code)
+        # 首先尝试不设置编码格式，使用摄像头默认格式
+        self.logger.info("使用摄像头默认格式初始化...")
 
         # 设置分辨率和帧率
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
@@ -191,6 +189,27 @@ class LaneDetectionPipeline:
 
         # 对于某些摄像头，可能需要设置缓冲区大小
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        # 先测试读取一帧，看看是否正常
+        ret, test_frame = self.cap.read()
+        if not ret or test_frame is None or test_frame.size == 0:
+            self.logger.warning("使用默认格式读取失败，尝试设置编码格式...")
+
+            # 尝试不同的编码格式
+            fourcc_options = []
+            if preferred_fourcc:
+                fourcc_options.append(preferred_fourcc)
+            fourcc_options.extend(["YUYV", "MJPG", "YV12"])
+            for fourcc in fourcc_options:
+                self.logger.info(f"尝试编码格式: {fourcc}")
+                fourcc_code = cv2.VideoWriter_fourcc(*fourcc)
+                self.cap.set(cv2.CAP_PROP_FOURCC, fourcc_code)
+
+                # 再测试读取一帧
+                ret, test_frame = self.cap.read()
+                if ret and test_frame is not None and test_frame.size > 0:
+                    self.logger.info(f"编码格式 {fourcc} 可用")
+                    break
 
         # 验证实际参数
         actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -211,10 +230,24 @@ class LaneDetectionPipeline:
         self.logger.info(f"   实际帧率: {actual_fps} FPS")
         self.logger.info(f"   实际编码: {actual_fourcc_str}")
 
-        # 测试读取一帧
+        # 再测试读取一帧并验证帧数据
         ret, test_frame = self.cap.read()
-        if not ret:
+        if not ret or test_frame is None:
             self.logger.warning("⚠️  摄像头初始化成功但无法读取帧，尝试继续...")
+        else:
+            # 验证帧数据
+            self.logger.info(f"帧形状: {test_frame.shape}, 数据类型: {test_frame.dtype}")
+            if len(test_frame.shape) == 3:
+                # 检查通道平均值，看看是否有异常绿色
+                import numpy as np
+                b_avg = np.mean(test_frame[:, :, 0])
+                g_avg = np.mean(test_frame[:, :, 1])
+                r_avg = np.mean(test_frame[:, :, 2])
+                self.logger.debug(f"通道平均值 - R: {r_avg:.1f}, G: {g_avg:.1f}, B: {b_avg:.1f}")
+
+                # 如果绿色通道异常高，可能需要检查颜色空间
+                if g_avg > 200 and r_avg < 50 and b_avg < 50:
+                    self.logger.warning("检测到异常绿色画面，可能需要检查颜色空间或编码格式")
 
         return True
     
@@ -260,7 +293,7 @@ class LaneDetectionPipeline:
         while not self.stop_event.is_set():
             ret, frame = self.cap.read()
 
-            if not ret:
+            if not ret or frame is None or frame.size == 0:
                 consecutive_failures += 1
                 if consecutive_failures % 30 == 1:  # 避免频繁打印
                     self.logger.warning(f"USB摄像头读取失败 (连续失败: {consecutive_failures})")
@@ -276,8 +309,36 @@ class LaneDetectionPipeline:
 
             consecutive_failures = 0  # 重置失败计数
 
-            # 放入缓冲区（非阻塞，满时丢弃旧帧）
-            self.frame_buffer.put(frame, blocking=False)
+            # 检查帧数据的有效性，防止出现纯绿色画面
+            import numpy as np
+            valid_frame = True
+
+            if len(frame.shape) == 3 and frame.shape[2] == 3:
+                # 计算各通道平均值
+                b_avg = np.mean(frame[:, :, 0])
+                g_avg = np.mean(frame[:, :, 1])
+                r_avg = np.mean(frame[:, :, 2])
+
+                # 检查是否有异常的颜色值（如纯绿色）
+                if g_avg > 230 and r_avg < 30 and b_avg < 30:
+                    valid_frame = False
+                    self.logger.warning("检测到纯绿色帧，丢弃...")
+
+                # 检查颜色通道是否有严重失衡
+                if abs(r_avg - g_avg) > 150 or abs(r_avg - b_avg) > 150 or abs(g_avg - b_avg) > 150:
+                    valid_frame = False
+                    self.logger.warning(f"颜色通道严重失衡 (R: {r_avg:.1f}, G: {g_avg:.1f}, B: {b_avg:.1f})，丢弃...")
+
+            # 检查帧的亮度是否正常
+            if valid_frame:
+                avg_brightness = np.mean(frame)
+                if avg_brightness < 5 or avg_brightness > 250:
+                    valid_frame = False
+                    self.logger.warning(f"帧亮度异常 ({avg_brightness:.1f})，丢弃...")
+
+            # 如果帧有效，放入缓冲区
+            if valid_frame:
+                self.frame_buffer.put(frame, blocking=False)
     
     def process_worker(self):
         """处理线程（推理 + 后处理）"""
