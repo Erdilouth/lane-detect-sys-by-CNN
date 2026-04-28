@@ -132,16 +132,16 @@ class TensorRTInferenceEngine:
     def infer(self, img: np.ndarray) -> np.ndarray:
         """
         执行推理
-        
+
         Args:
             img: 输入图像 (BGR格式, HWC)
-        
+
         Returns:
             推理结果 (原始输出张量)
         """
         # 预处理
         input_data = self.preprocess(img)
-        
+
         # Host -> Device
         cudart.cudaMemcpy(
             self.d_input,
@@ -149,14 +149,34 @@ class TensorRTInferenceEngine:
             self.input_size,
             cudart.cudaMemcpyKind.cudaMemcpyHostToDevice
         )
-        
-        # 设置输入输出地址
-        self.context.set_tensor_address(self.input_name, self.d_input)
-        self.context.set_tensor_address(self.output_name, self.d_output)
-        
-        # 执行推理
-        self.context.execute_v3(0)
-        
+
+        # 执行推理 - 兼容不同版本的TensorRT
+        try:
+            # 方法1: 尝试使用execute_v3 (TensorRT 8.5+)
+            if hasattr(self.context, 'execute_v3'):
+                # 设置输入输出地址
+                self.context.set_tensor_address(self.input_name, self.d_input)
+                self.context.set_tensor_address(self.output_name, self.d_output)
+                self.context.execute_v3(0)
+            # 方法2: 尝试使用execute_async_v2
+            elif hasattr(self.context, 'execute_async_v2'):
+                bindings = [int(self.d_input), int(self.d_output)]
+                stream = cuda.cudaStreamCreate()
+                self.context.execute_async_v2(bindings=bindings, stream_handle=stream)
+                cuda.cudaStreamSynchronize(stream)
+                cuda.cudaStreamDestroy(stream)
+            # 方法3: 尝试使用execute_v2
+            elif hasattr(self.context, 'execute_v2'):
+                bindings = [int(self.d_input), int(self.d_output)]
+                self.context.execute_v2(bindings=bindings)
+            # 方法4: 尝试使用execute (传统方法)
+            else:
+                bindings = [int(self.d_input), int(self.d_output)]
+                self.context.execute(batch_size=self.input_shape[0], bindings=bindings)
+        except Exception as e:
+            self.logger.error(f"推理执行失败: {e}")
+            raise
+
         # Device -> Host
         cudart.cudaMemcpy(
             self.h_output.ctypes.data,
@@ -164,7 +184,7 @@ class TensorRTInferenceEngine:
             self.output_size,
             cudart.cudaMemcpyKind.cudaMemcpyDeviceToHost
         )
-        
+
         return self.h_output.copy()  # 返回副本以避免内存问题
     
     def infer_mask(self, img: np.ndarray, threshold: float = 0.5) -> np.ndarray:

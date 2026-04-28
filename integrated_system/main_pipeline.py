@@ -22,6 +22,13 @@ from .lane_fitting import LaneFitter
 from .uart_comm import UARTCommunicator
 from .frame_buffer import FrameBuffer, SharedData
 
+# 尝试导入Libargus
+try:
+    import argus
+    LIBARGUS_AVAILABLE = True
+except ImportError:
+    LIBARGUS_AVAILABLE = False
+
 
 class LaneDetectionPipeline:
     """
@@ -63,6 +70,9 @@ class LaneDetectionPipeline:
         
         # 摄像头
         self.cap = None
+        self.camera = None  # Libargus相机对象
+        self.stream = None  # Libargus流对象
+        self.using_libargus = False  # 是否使用Libargus
         
         # 线程
         self.capture_thread = None
@@ -82,52 +92,192 @@ class LaneDetectionPipeline:
         Returns:
             是否成功
         """
-        camera_id = CAMERA_CONFIG["camera_id"]
+        use_libargus = CAMERA_CONFIG.get("use_libargus", False)
+        
+        if use_libargus:
+            if not LIBARGUS_AVAILABLE:
+                self.logger.error("❌ Libargus未安装，请先安装: sudo apt-get install python3-libargus")
+                self.logger.info("提示: 回退到使用OpenCV直接调用摄像头")
+                use_libargus = False
+            else:
+                return self._init_libargus_camera()
+        
+        # 使用OpenCV直接调用摄像头
+        return self._init_opencv_camera()
+    
+    def _init_libargus_camera(self) -> bool:
+        """使用Libargus初始化CSI摄像头"""
+        try:
+            import argus
+            
+            camera_id = CAMERA_CONFIG["camera_id"]
+            width = CAMERA_CONFIG["width"]
+            height = CAMERA_CONFIG["height"]
+            fps = CAMERA_CONFIG["fps"]
+            camera_mode = CAMERA_CONFIG.get("libargus_camera_mode", "1280x720")
+            timeout = CAMERA_CONFIG.get("libargus_timeout", 10.0)
+            
+            self.logger.info(f"使用Libargus初始化CSI摄像头 (IMX219)")
+            self.logger.info(f"   摄像头ID: {camera_id}")
+            self.logger.info(f"   相机模式: {camera_mode}")
+            self.logger.info(f"   目标分辨率: {width}x{height}")
+            self.logger.info(f"   目标帧率: {fps} FPS")
+            
+            # 创建Argus相机
+            self.camera = argus.Camera(camera_id)
+            self.camera.open()
+            
+            # 创建流
+            self.stream = argus.Stream(self.camera)
+            self.stream.open()
+            
+            # 设置相机属性
+            self.stream.set_mode(argus.PIXEL_FORMAT_YUV420, width, height)
+            self.stream.set_fps(fps)
+            
+            # 创建帧捕获器
+            self.stream.start_capture()
+            
+            self.using_libargus = True
+            
+            self.logger.info(f"✅ Libargus摄像头初始化成功")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ Libargus初始化失败: {e}")
+            self.logger.info("提示: 回退到使用OpenCV直接调用摄像头")
+            return False
+    
+    def _init_opencv_camera(self) -> bool:
+        """使用OpenCV初始化USB摄像头"""
+        camera_id = CAMERA_CONFIG.get("usb_camera_id", CAMERA_CONFIG["camera_id"])
         width = CAMERA_CONFIG["width"]
         height = CAMERA_CONFIG["height"]
         fps = CAMERA_CONFIG["fps"]
-        
-        # 直接使用OpenCV调用摄像头
-        self.logger.info(f"打开摄像头: /dev/video{camera_id}")
-        self.cap = cv2.VideoCapture(camera_id)
-        
-        if not self.cap.isOpened():
-            self.logger.error("❌ 无法打开摄像头")
+        fourcc = CAMERA_CONFIG.get("usb_camera_fourcc", "MJPG")
+
+        # 尝试不同的后端打开摄像头
+        backends = [
+            cv2.CAP_ANY,
+            cv2.CAP_V4L2,
+            cv2.CAP_GSTREAMER,
+        ]
+
+        self.cap = None
+        for backend in backends:
+            self.logger.info(f"尝试使用后端 {backend} 打开USB摄像头: /dev/video{camera_id}")
+            try:
+                self.cap = cv2.VideoCapture(camera_id, backend)
+                if self.cap.isOpened():
+                    break
+            except Exception as e:
+                self.logger.warning(f"后端 {backend} 失败: {e}")
+                self.cap = None
+                continue
+
+        if not self.cap or not self.cap.isOpened():
+            self.logger.error("❌ 无法打开USB摄像头，请检查摄像头是否正确连接")
+            self.logger.info(f"提示：可以尝试使用 'ls /dev/video*' 查看可用摄像头设备")
             return False
-        
+
+        # 设置视频编码格式
+        fourcc_code = cv2.VideoWriter_fourcc(*fourcc)
+        self.cap.set(cv2.CAP_PROP_FOURCC, fourcc_code)
+
         # 设置分辨率和帧率
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         self.cap.set(cv2.CAP_PROP_FPS, fps)
-        
+
+        # 对于某些摄像头，可能需要设置缓冲区大小
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
         # 验证实际参数
         actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         actual_fps = int(self.cap.get(cv2.CAP_PROP_FPS))
-        
-        self.logger.info(f"✅ 摄像头初始化成功")
+        actual_fourcc = int(self.cap.get(cv2.CAP_PROP_FOURCC))
+
+        # 解码fourcc
+        actual_fourcc_str = "".join([
+            chr((actual_fourcc >> 8 * i) & 0xFF)
+            for i in range(4)
+        ])
+
+        self.logger.info(f"✅ USB摄像头初始化成功")
         self.logger.info(f"   配置分辨率: {width}x{height}")
         self.logger.info(f"   实际分辨率: {actual_width}x{actual_height}")
         self.logger.info(f"   目标帧率: {fps} FPS")
         self.logger.info(f"   实际帧率: {actual_fps} FPS")
-        
+        self.logger.info(f"   实际编码: {actual_fourcc_str}")
+
+        # 测试读取一帧
+        ret, test_frame = self.cap.read()
+        if not ret:
+            self.logger.warning("⚠️  摄像头初始化成功但无法读取帧，尝试继续...")
+
         return True
     
     def capture_worker(self):
         """摄像头采集线程"""
         self.logger.info("📷 摄像头采集线程启动")
         
-        while not self.stop_event.is_set():
-            ret, frame = self.cap.read()
-            
-            if not ret:
-                self.logger.warning("摄像头读取失败")
-                continue
-            
-            # 放入缓冲区（非阻塞，满时丢弃旧帧）
-            self.frame_buffer.put(frame, blocking=False)
+        if self.using_libargus:
+            self._capture_libargus_frames()
+        else:
+            self._capture_opencv_frames()
         
         self.logger.info("📷 摄像头采集线程停止")
+    
+    def _capture_libargus_frames(self):
+        """使用Libargus捕获帧"""
+        try:
+            import argus
+            
+            while not self.stop_event.is_set():
+                # 从Libargus流中获取帧
+                frame = self.stream.get_frame(timeout=10.0)
+                
+                if frame is None:
+                    continue
+                
+                # 转换为OpenCV格式
+                argus_frame = frame.get_array()
+                # YUV420转BGR
+                bgr_frame = cv2.cvtColor(argus_frame, cv2.COLOR_YUV2BGR_I420)
+                
+                # 放入缓冲区
+                self.frame_buffer.put(bgr_frame, blocking=False)
+                
+        except Exception as e:
+            self.logger.error(f"Libargus帧捕获错误: {e}")
+    
+    def _capture_opencv_frames(self):
+        """使用OpenCV捕获USB摄像头帧"""
+        consecutive_failures = 0
+        max_consecutive_failures = 10
+
+        while not self.stop_event.is_set():
+            ret, frame = self.cap.read()
+
+            if not ret:
+                consecutive_failures += 1
+                if consecutive_failures % 30 == 1:  # 避免频繁打印
+                    self.logger.warning(f"USB摄像头读取失败 (连续失败: {consecutive_failures})")
+
+                if consecutive_failures >= max_consecutive_failures:
+                    self.logger.error("USB摄像头连续读取失败过多，尝试重新初始化...")
+                    self.cap.release()
+                    if not self._init_opencv_camera():
+                        self.logger.error("重新初始化USB摄像头失败，等待后重试...")
+                        time.sleep(2)
+                    consecutive_failures = 0
+                continue
+
+            consecutive_failures = 0  # 重置失败计数
+
+            # 放入缓冲区（非阻塞，满时丢弃旧帧）
+            self.frame_buffer.put(frame, blocking=False)
     
     def process_worker(self):
         """处理线程（推理 + 后处理）"""
@@ -395,7 +545,15 @@ class LaneDetectionPipeline:
         if self.uart_thread and self.uart_thread.is_alive():
             self.uart_thread.join(timeout=2.0)
         
-        # 释放资源
+        # 释放Libargus资源
+        if self.using_libargus:
+            if self.stream:
+                self.stream.stop_capture()
+                self.stream.close()
+            if self.camera:
+                self.camera.close()
+        
+        # 释放OpenCV资源
         if self.cap:
             self.cap.release()
         

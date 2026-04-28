@@ -24,8 +24,10 @@ CAMERA_CONFIG = {
     "height": 720,   # 图像高度
     "fps": 30,       # 目标帧率
     
-    # 直接使用OpenCV调用摄像头（不需要GStreamer管道）
-    "use_gstreamer": False
+    # 使用OpenCV处理USB摄像头（支持USB相机）
+    "use_libargus": False,
+    "usb_camera_id": 0,        # USB摄像头ID（通常为0或1）
+    "usb_camera_fourcc": "MJPG" # 视频编码格式（MJPG, YUYV等）
 }
 
 # ============================================
